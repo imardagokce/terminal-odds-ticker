@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "terminal-odds-ticker"
+version = "0.1.0"
+description = "A terminal dashboard for live football odds"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "textual>=0.50.0",
+    "polars>=0.20.0",
+    "pydantic>=2.0.0",
+]
+
+[project.scripts]
+odds-ticker = "odds_ticker.app:main"
+
+[tool.setuptools.packages.find]
+include = ["odds_ticker*"]
