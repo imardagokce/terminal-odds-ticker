@@ -19,13 +19,6 @@ from odds_ticker.analytics import (
 class MatchDetailView(Widget):
     """Show selected fixture probabilities, bookmaker margin and stake guidance."""
 
-    DEFAULT_CSS = """
-    MatchDetailView { height: 1fr; }
-    #detail-content { height: auto; padding-bottom: 1; }
-    #bankroll { margin-top: 1; }
-    #movement-log { height: auto; padding-top: 1; }
-    """
-
     def __init__(self, *, id: str | None = None) -> None:
         super().__init__(id=id)
         self._match: dict[str, Any] | None = None
@@ -64,7 +57,7 @@ class MatchDetailView(Widget):
         try:
             bankroll = float(self.query_one("#bankroll", Input).value)
             stake = calculate_fractional_kelly(
-                odds={"Home": prices[0], "Draw": prices[1], "Away": prices[2]}[str(match["value_pick"])] ,
+                odds={"Home": prices[0], "Draw": prices[1], "Away": prices[2]}[str(match["value_pick"])],
                 estimated_prob=float(match["value_probability"]),
                 bankroll=bankroll,
             )
@@ -73,6 +66,8 @@ class MatchDetailView(Widget):
             stake_text = "Enter a valid bankroll"
         implied = tuple(calculate_implied_probability(price) * 100 for price in prices)
         margin = calculate_overround(*prices)
+        edge = float(match["value_edge"])
+        edge_colour = "#00ff87" if edge > 5 else "#ffb86c" if edge >= 0 else "#8b5a62"
         content = (
             f"[bold]{match['home_team']} v {match['away_team']}[/bold]\n"
             f"{match['league']}\n\n"
@@ -80,7 +75,7 @@ class MatchDetailView(Widget):
             f"Draw   {prices[1]:.2f}  ({implied[1]:.1f}% implied)\n"
             f"Away   {prices[2]:.2f}  ({implied[2]:.1f}% implied)\n\n"
             f"Bookmaker vig  {margin:+.2f}%\n"
-            f"Value edge     {float(match['value_edge']):+.2f}%\n"
+            f"Value edge     [bold {edge_colour}]{edge:+.2f}%[/]\n"
             f"Value pick     {match['value_pick']}\n"
             f"Suggested stake {stake_text}\n\n"
             f"Updated {match['timestamp'].strftime('%H:%M:%S UTC')}"

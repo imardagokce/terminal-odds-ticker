@@ -1,0 +1,90 @@
+Screen {
+    background: #0b1016;
+    color: #dce6f0;
+}
+
+Header, Footer {
+    background: #121a23;
+    color: #e6edf3;
+}
+
+#layout {
+    height: 1fr;
+    padding: 1 2;
+    layout: grid;
+    grid-size: 2 1;
+    grid-columns: 3fr 2fr;
+    grid-gutter: 1 2;
+}
+
+#markets, #details {
+    height: 1fr;
+    border: round #304254;
+    background: #101720;
+    padding: 1;
+}
+
+#market-title, #detail-title {
+    height: 2;
+    color: #7dd3fc;
+    text-style: bold;
+    padding: 0 1;
+}
+
+DataTable {
+    height: 1fr;
+    border: round #263747;
+    background: #0d141c;
+    color: #dce6f0;
+    scrollbar-color: #526b80;
+    scrollbar-color-hover: #7dd3fc;
+}
+
+DataTable > .datatable--header {
+    background: #1b2936;
+    color: #bfe9ff;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #23384a;
+    color: #ffffff;
+    text-style: bold;
+}
+
+MatchDetailView {
+    height: 1fr;
+    border: round #375268;
+    background: #0d141c;
+    padding: 1 2;
+}
+
+#detail-content {
+    height: auto;
+    padding-bottom: 1;
+    color: #dce6f0;
+}
+
+#bankroll {
+    margin-top: 1;
+    border: tall #304254;
+    background: #111b25;
+}
+
+#movement-log {
+    height: auto;
+    padding-top: 1;
+    color: #9fb0c1;
+}
+
+#layout.compact {
+    grid-size: 1 2;
+    grid-columns: 1fr;
+    grid-rows: 2fr 1fr;
+    padding: 0 1;
+    grid-gutter: 1;
+}
+
+#layout.compact #details {
+    padding: 0 1;
+}

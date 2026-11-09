@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from rich.text import Text
+from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Footer, Header, Static
@@ -18,14 +19,7 @@ class OddsTickerApp(App[None]):
 
     TITLE = "Odds Ticker"
     SUB_TITLE = "Live football markets · mock feed"
-    CSS = """
-    Screen { background: #10151b; color: #e6edf3; }
-    #layout { height: 1fr; padding: 1 2; }
-    #markets { width: 3fr; border: round #344454; padding: 0 1; }
-    #details { width: 2fr; border: round #344454; padding: 1 2; margin-left: 1; }
-    #market-title, #detail-title { text-style: bold; color: #7dd3fc; padding-bottom: 1; }
-    DataTable { height: 1fr; }
-    """
+    CSS_PATH = "styles.tcss"
     BINDINGS = [
         ("q", "quit", "Quit"),
         ("r", "refresh", "Refresh"),
@@ -57,6 +51,11 @@ class OddsTickerApp(App[None]):
         table.cursor_type = "row"
         self.refresh_snapshot()
         self.set_interval(3, self.refresh_snapshot)
+
+    def on_resize(self, event: events.Resize) -> None:
+        """Stack the panels when the terminal is too narrow for columns."""
+        layout = self.query_one("#layout", Horizontal)
+        layout.set_class(event.size.width < 100, "compact")
 
     def action_refresh(self) -> None:
         """Fetch a fresh market snapshot."""
@@ -95,11 +94,9 @@ class OddsTickerApp(App[None]):
         table.clear()
         for row in rows:
             edge = float(row["value_edge"])
-            fixture = Text(
-                f"{row['home_team']} v {row['away_team']}",
-                style="bold green" if edge >= 5 else "",
-            )
-            edge_cell = Text(f"{edge:+.1f}%", style="bold green" if edge >= 5 else "")
+            fixture = Text(f"{row['home_team']} v {row['away_team']}")
+            edge_colour = "#00ff87" if edge > 5 else "#ffb86c" if edge >= 0 else "#8b5a62"
+            edge_cell = Text(f"{edge:+.1f}%", style=f"bold {edge_colour}")
             prices = (
                 f"{row['home_trend']} {row['home_win']:.2f}",
                 f"{row['draw_trend']} {row['draw']:.2f}",

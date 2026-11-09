@@ -19,3 +19,6 @@ odds-ticker = "odds_ticker.app:main"
 
 [tool.setuptools.packages.find]
 include = ["odds_ticker*"]
+
+[tool.setuptools.package-data]
+odds_ticker = ["styles.tcss"]
