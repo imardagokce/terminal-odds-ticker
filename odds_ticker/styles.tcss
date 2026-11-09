@@ -24,6 +24,37 @@ Header, Footer {
     padding: 1;
 }
 
+#markets { padding: 0 1; }
+
+#market-tabs { height: 1fr; }
+
+TabPane { height: 1fr; padding: 0; }
+
+#exposure-warning {
+    height: 1;
+    dock: bottom;
+    color: #ffb86c;
+    text-style: bold;
+    padding-left: 2;
+}
+
+LeagueFilterModal { align: center middle; background: #000000 65%; }
+
+#league-modal {
+    width: 56;
+    height: auto;
+    max-height: 85%;
+    border: round #7dd3fc;
+    background: #101720;
+    padding: 1 2;
+}
+
+.modal-title { color: #7dd3fc; text-style: bold; padding-bottom: 1; }
+
+LeagueFilterModal Checkbox { height: 3; }
+
+LeagueFilterModal Button { margin: 1 1 0 0; }
+
 #market-title, #detail-title {
     height: 2;
     color: #7dd3fc;

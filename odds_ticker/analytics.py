@@ -1,5 +1,16 @@
 """Odds and staking calculations for the market inspector."""
 
+KELLY_FRACTIONS = (0.25, 0.50, 1.00)
+
+
+def cycle_kelly_fraction(current: float) -> float:
+    """Return the next configured Kelly fraction, wrapping after full Kelly."""
+    try:
+        index = KELLY_FRACTIONS.index(current)
+    except ValueError:
+        return KELLY_FRACTIONS[0]
+    return KELLY_FRACTIONS[(index + 1) % len(KELLY_FRACTIONS)]
+
 
 def calculate_implied_probability(decimal_odds: float) -> float:
     """Return the implied probability for decimal odds."""
