@@ -2,31 +2,42 @@
 
 # ⚡ terminal-odds-ticker
 
-**A live-style football odds dashboard for your terminal.**
+**A keyboard-driven football odds and value analysis dashboard for your terminal.**
 
-Track simulated market movement, spot potential value and explore fractional Kelly staking from a keyboard-first Textual interface.
+Compare simulated market prices, follow odds movement and explore Kelly staking in a fast Textual interface.
 
-[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Textual TUI](https://img.shields.io/badge/TUI-Textual-6741D9)](https://textual.textualize.io/)
-[![Polars Core](https://img.shields.io/badge/Data-Polars-CD792C)](https://pola.rs/)
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![Version 2.0.0](https://img.shields.io/badge/Version-2.0.0-blue?style=for-the-badge)
+![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Textual](https://img.shields.io/badge/TUI-Textual-6741D9?style=for-the-badge)
+![Polars](https://img.shields.io/badge/Data-Polars-CD792C?style=for-the-badge)
+![MIT License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
-[Overview](#overview) · [Features](#features) · [Quick Start](#quick-start) · [Keybindings](#keybindings) · [License](#license)
+[Overview](#overview) · [What's New](#version-200-whats-new) · [Features](#features) · [Quick Start](#quick-start) · [Keybindings](#keybindings) · [License](#license)
 
 </div>
 
 ## Overview
 
-`terminal-odds-ticker` is a compact terminal application for exploring football 1X2 odds. Its mock feed produces live-style snapshots as Polars DataFrames, with small random price movements and calculated value edges. Use the split-screen market table and match inspector to follow the fixtures that interest you.
+`terminal-odds-ticker` is a terminal-based quantitative football betting tool. Its simulated feed refreshes odds snapshots as Polars data, calculates market value edges and presents fixtures in an interactive Textual dashboard. Inspect a match, compare its markets and view suggested fractional Kelly stakes against an editable bankroll.
+
+> The included feed is simulated. Prices and value estimates are illustrative and are not betting advice.
+
+## Version 2.0.0: What's New
+
+- **Tabbed market views:** Switch between 1X2, Over / Under 2.5, Both Teams to Score (BTTS) and Asian Handicap (-0.5 / +0.5).
+- **League Selection modal (`l`):** Choose individual leagues, select all leagues or clear the selection.
+- **Live odds trends:** A native Textual `Sparkline` plots the selected outcome's recent odds history, retained for up to 15 feed ticks per fixture.
+- **Dynamic Kelly modes (`k`):** Cycle through Quarter Kelly (25%), Half Kelly (50%) and Full Kelly (100%).
+- **Exposure warning:** A warning appears when the combined recommended stakes for positive-edge fixtures exceed 15% of the entered bankroll.
 
 ## Features
 
-- **Real-time Polars data streaming** from a simulated football odds feed, refreshed every three seconds.
-- **Fractional Kelly criterion calculator** with an editable bankroll and a suggested quarter-Kelly stake.
-- **Vig and margin detection** with implied probability breakdowns for each outcome.
-- **Odds movement history** for the selected value pick.
-- **Hotkey sorting and league filtering** to focus the market table.
-- **High-contrast dark interface** with colour-coded value edges.
+- **Fast Polars engine** for working with refreshed multi-market snapshots.
+- **Bookmaker vig detection** using implied probabilities and overround calculations.
+- **Positive expected-value edge calculator** across all four supported market types.
+- **Fractional Kelly stake guidance** with an editable bankroll and selectable Kelly fraction.
+- **TCSS dark styling** with colour-coded edges, market tables and keyboard navigation.
+- **Deterministic mock feed option** for repeatable development and tests through a configurable random seed.
 
 ## Quick Start
 
@@ -35,20 +46,25 @@ Requires Python 3.12 or newer.
 ```bash
 git clone https://github.com/imardagokce/terminal-odds-ticker.git
 cd terminal-odds-ticker
-python -m pip install -e .
+pip install -e .
 odds-ticker
 ```
 
-The feed is simulated; it does not connect to bookmakers or provide real-time betting prices.
+To run the test suite:
+
+```bash
+python -m unittest discover tests
+```
 
 ## Keybindings
 
 | Key | Action |
 |:---:|:---|
+| `l` | Open the league selection modal |
+| `k` | Cycle Quarter, Half and Full Kelly |
+| `s` | Cycle sort order |
+| `r` | Refresh the feed |
 | `q` | Quit the application |
-| `r` | Refresh the market snapshot |
-| `s` | Cycle sorting by value edge, home odds and league |
-| `f` | Cycle through league filters |
 
 ## License
 
