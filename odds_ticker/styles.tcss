@@ -39,6 +39,18 @@ TabPane { height: 1fr; padding: 0; }
 }
 
 LeagueFilterModal { align: center middle; background: #000000 65%; }
+ApiKeyModal { align: center middle; background: #000000 65%; }
+
+#api-key-modal {
+    width: 72;
+    height: auto;
+    border: round #7dd3fc;
+    background: #101720;
+    padding: 1 2;
+}
+
+ApiKeyModal Input { margin-bottom: 1; }
+ApiKeyModal Button { margin: 0 1 0 0; }
 
 #league-modal {
     width: 56;

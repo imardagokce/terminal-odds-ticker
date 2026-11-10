@@ -11,9 +11,10 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Footer, Header, Input, Static, TabbedContent, TabPane
 
 from odds_ticker.analytics import KELLY_FRACTIONS, calculate_fractional_kelly, cycle_kelly_fraction
+from odds_ticker.config import load_config, save_api_key
 from odds_ticker.feed import FAIR_KEYS, MARKETS, MockOddsFeed
 from odds_ticker.fetcher import LiveOddsFeed
-from odds_ticker.widgets import LeagueFilterModal, MatchDetailView
+from odds_ticker.widgets import ApiKeyModal, LeagueFilterModal, MatchDetailView
 
 
 class OddsTickerApp(App[None]):
@@ -28,9 +29,11 @@ class OddsTickerApp(App[None]):
 
     def __init__(self) -> None:
         super().__init__()
-        api_key = os.getenv("ODDS_API_KEY")
+        api_key = os.getenv("ODDS_API_KEY") or str(load_config().get("api_key", "")).strip()
+        self._api_key = api_key
         self.feed = LiveOddsFeed(api_key) if api_key else MockOddsFeed()
         self.feed_indicator = "[LIVE API]" if api_key else "[MOCK FEED]"
+        self._refresh_timer_started = False
         self._rows: dict[str, dict[str, Any]] = {}
         self._sort_mode = 0
         self._active_leagues: set[str] | None = None
@@ -55,8 +58,32 @@ class OddsTickerApp(App[None]):
         self.sub_title = f"{self.feed_indicator} · Live football markets"
         for table in self.query(DataTable):
             table.add_columns("League", "Fixture", "Selection 1", "Selection 2", "Selection 3", "Edge")
+        if not self._api_key:
+            self.push_screen(ApiKeyModal(), self._on_api_key_choice)
+            return
+        self._start_feed()
+
+    def _on_api_key_choice(self, api_key: str | None) -> None:
+        """Apply the selected live or mock feed after onboarding."""
+        if api_key:
+            save_api_key(api_key)
+            self._api_key = api_key
+            self.feed = LiveOddsFeed(api_key)
+            self.feed_indicator = "[LIVE API]"
+        else:
+            self._api_key = ""
+            self.feed = MockOddsFeed()
+            self.feed_indicator = "[MOCK FEED]"
+        self.sub_title = f"{self.feed_indicator} · Live football markets"
+        self.query_one(MatchDetailView)._history_provider = self.feed.history
+        self._start_feed()
+
+    def _start_feed(self) -> None:
+        """Populate the dashboard and schedule regular refreshes once."""
         self.refresh_snapshot()
-        self.set_interval(3, self.refresh_snapshot)
+        if not self._refresh_timer_started:
+            self.set_interval(3, self.refresh_snapshot)
+            self._refresh_timer_started = True
 
     def action_refresh(self) -> None:
         """Fetch and display a fresh market snapshot."""

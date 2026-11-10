@@ -14,6 +14,24 @@ from textual.widgets import Button, Checkbox, Input, Sparkline, Static
 from odds_ticker.analytics import calculate_fractional_kelly, calculate_implied_probability, calculate_overround
 
 
+class ApiKeyModal(ModalScreen[str | None]):
+    """Collect an optional Odds API key during first run."""
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="api-key-modal"):
+            yield Static("Enter your The Odds API Key (Leave blank for Mock Mode):", classes="modal-title")
+            yield Input(placeholder="The Odds API key", password=True, id="api-key-input")
+            with Horizontal():
+                yield Button("Save & Continue", variant="primary", id="save-api-key")
+                yield Button("Use Mock Mode", id="use-mock")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "save-api-key":
+            self.dismiss(self.query_one("#api-key-input", Input).value.strip())
+        elif event.button.id == "use-mock":
+            self.dismiss("")
+
+
 class LeagueFilterModal(ModalScreen[set[str] | None]):
     """Choose which leagues appear in the market tables."""
 
