@@ -4,19 +4,20 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
-from textual.widgets import DataTable, Footer, Header, Input, Static, TabbedContent, TabPane
+from textual.widgets import DataTable, Footer, Header, Static, TabbedContent, TabPane
 
 from odds_ticker.analytics import KELLY_FRACTIONS, calculate_fractional_kelly, cycle_kelly_fraction
-from odds_ticker.config import load_config, save_api_key
+from odds_ticker.config import load_config, save_api_key, save_bankroll
 from odds_ticker.feed import FAIR_KEYS, MARKETS, MockOddsFeed
 from odds_ticker.fetcher import LiveOddsFeed
-from odds_ticker.widgets import ApiKeyModal, LeagueFilterModal, MatchDetailView
+from odds_ticker.widgets import ApiKeyModal, BankrollModal, LeagueFilterModal, MatchDetailView
 
 
 class OddsTickerApp(App[None]):
@@ -29,7 +30,7 @@ class OddsTickerApp(App[None]):
         if getattr(sys, "frozen", False)
         else Path(__file__).parent / "styles.tcss"
     )
-    BINDINGS = [("q", "quit", "Quit"), ("r", "refresh", "Refresh"), ("s", "cycle_sort", "Sort"), ("l", "select_leagues", "Leagues"), ("k", "cycle_kelly", "Kelly")]
+    BINDINGS = [("q", "quit", "Quit"), ("r", "refresh", "Refresh"), ("s", "cycle_sort", "Sort"), ("l", "select_leagues", "Leagues"), ("k", "cycle_kelly", "Kelly"), ("t", "toggle_today_filter", "Today/All"), ("b", "set_bankroll", "Bankroll")]
     MARKET_IDS = {"tab-1x2": "1X2", "tab-ou": "Over / Under", "tab-btts": "BTTS", "tab-ah": "Asian Handicap"}
     KELLY_FRACTIONS = KELLY_FRACTIONS
 
@@ -44,6 +45,11 @@ class OddsTickerApp(App[None]):
         self._sort_mode = 0
         self._active_leagues: set[str] | None = None
         self._kelly_index = 0
+        self._today_only = False
+        try:
+            self._bankroll = max(0.0, float(load_config().get("bankroll", 1000.0)))
+        except (TypeError, ValueError):
+            self._bankroll = 1000.0
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -62,8 +68,9 @@ class OddsTickerApp(App[None]):
 
     def on_mount(self) -> None:
         self.sub_title = f"{self.feed_indicator} · Live football markets"
+        self.query_one(MatchDetailView).set_bankroll(self._bankroll)
         for table in self.query(DataTable):
-            table.add_columns("League", "Fixture", "Selection 1", "Selection 2", "Selection 3", "Edge")
+            table.add_columns("League", "Fixture", "Time / Status", "Selection 1", "Selection 2", "Selection 3", "Edge")
         if not self._api_key:
             self.push_screen(ApiKeyModal(), self._on_api_key_choice)
             return
@@ -107,6 +114,22 @@ class OddsTickerApp(App[None]):
         self.query_one(MatchDetailView).set_kelly_fraction(self.KELLY_FRACTIONS[self._kelly_index])
         self._render_exposure()
 
+    def action_toggle_today_filter(self) -> None:
+        """Toggle between all fixtures and fixtures starting today locally."""
+        self._today_only = not self._today_only
+        self._render_tables()
+
+    def action_set_bankroll(self) -> None:
+        """Open the bankroll editor."""
+        self.push_screen(BankrollModal(self._bankroll), self._save_bankroll)
+
+    def _save_bankroll(self, bankroll: float | None) -> None:
+        if bankroll is not None:
+            self._bankroll = bankroll
+            save_bankroll(bankroll)
+            self.query_one(MatchDetailView).set_bankroll(bankroll)
+            self._render_exposure()
+
     def action_select_leagues(self) -> None:
         """Open the league filter chooser."""
         leagues = sorted({str(row["league"]) for row in self._rows.values()})
@@ -145,6 +168,8 @@ class OddsTickerApp(App[None]):
         rows = list(self._rows.values())
         if self._active_leagues is not None:
             rows = [row for row in rows if row["league"] in self._active_leagues]
+        if self._today_only:
+            rows = [row for row in rows if self._kickoff(row) is not None and self._kickoff(row).astimezone().date() == datetime.now().astimezone().date()]
         sort_keys = (lambda row: -float(row["value_edge"]), lambda row: float(row["home_win"]), lambda row: str(row["league"]))
         rows.sort(key=sort_keys[self._sort_mode])
         for tab_id, market in self.MARKET_IDS.items():
@@ -152,19 +177,48 @@ class OddsTickerApp(App[None]):
             table.clear()
             keys, labels = MARKETS[market]
             table.clear(columns=True)
-            table.add_columns("League", "Fixture", *labels, "Edge")
+            table.add_columns("League", "Fixture", "Time / Status", *labels, "Edge")
             for row in rows:
                 prices = [float(row[key]) for key in keys]
                 edge = float(row[f"edge_{market}"])
                 colour = "#00ff87" if edge > 5 else "#ffb86c" if edge >= 0 else "#8b5a62"
-                table.add_row(str(row["league"]), Text(f"{row['home_team']} v {row['away_team']}"), *(f"{price:.2f}" for price in prices), Text(f"{edge:+.1f}%", style=f"bold {colour}"), key=str(row["match_id"]))
+                kickoff = self._kickoff(row)
+                time_status = self._time_status(kickoff)
+                table.add_row(str(row["league"]), Text(f"{row['home_team']} v {row['away_team']}"), time_status, *(f"{price:.2f}" for price in prices), Text(f"{edge:+.1f}%", style=f"bold {colour}"), key=str(row["match_id"]))
         active = self.query_one("#market-tabs", TabbedContent).active
         market = self.MARKET_IDS.get(str(active), "1X2")
-        self.query_one("#market-title", Static).update(f"{market.upper()} · {'Value edge ↓' if self._sort_mode == 0 else 'Odds ↑' if self._sort_mode == 1 else 'League A–Z'} · {len(rows)} fixtures · l LEAGUES · k {self.KELLY_FRACTIONS[self._kelly_index]:.0%} KELLY")
+        self.sub_title = f"{self.feed_indicator} · {'[TODAY ONLY]' if self._today_only else '[ALL FIXTURES]'} · Live football markets"
+        self.query_one("#market-title", Static).update(f"{market.upper()} · {'Value edge ↓' if self._sort_mode == 0 else 'Odds ↑' if self._sort_mode == 1 else 'League A–Z'} · {len(rows)} fixtures · t TODAY/ALL · b BANKROLL · l LEAGUES · k {self.KELLY_FRACTIONS[self._kelly_index]:.0%} KELLY")
         if rows:
             self.query_one(f"#table-{active}", DataTable).move_cursor(row=0)
             self.query_one(MatchDetailView).set_match(self._market_row(rows[0], market))
+        else:
+            self.query_one(MatchDetailView).clear_match()
         self._render_exposure()
+
+    @staticmethod
+    def _kickoff(row: dict[str, Any]) -> datetime | None:
+        value = row.get("commence_time")
+        if isinstance(value, datetime):
+            return value if value.tzinfo else value.astimezone()
+        if isinstance(value, str):
+            try:
+                parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+                return parsed if parsed.tzinfo else parsed.astimezone()
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _time_status(kickoff: datetime | None) -> str:
+        if kickoff is None:
+            return "—"
+        local = kickoff.astimezone()
+        now = datetime.now().astimezone()
+        if local <= now:
+            return "LIVE"
+        prefix = "Today " if local.date() == now.date() else ""
+        return f"{prefix}{local:%H:%M}"
 
     def _market_row(self, row: dict[str, Any], market: str) -> dict[str, Any]:
         keys, labels = MARKETS[market]
@@ -178,9 +232,9 @@ class OddsTickerApp(App[None]):
     def _render_exposure(self) -> None:
         if not self.is_mounted:
             return
-        try:
-            bankroll = float(self.query_one("#bankroll", Input).value)
-        except (ValueError, TypeError):
+        bankroll = self._bankroll
+        if bankroll <= 0:
+            self.query_one("#exposure-warning", Static).update("")
             return
         exposure = sum(calculate_fractional_kelly(float(row["value_odds"]), float(row["value_probability"]), self.KELLY_FRACTIONS[self._kelly_index], bankroll) for row in self._rows.values() if float(row["value_edge"]) > 0)
         badge = self.query_one("#exposure-warning", Static)
@@ -192,6 +246,8 @@ class OddsTickerApp(App[None]):
         rows = list(self._rows.values())
         if self._active_leagues is not None:
             rows = [row for row in rows if row["league"] in self._active_leagues]
+        if self._today_only:
+            rows = [row for row in rows if self._kickoff(row) is not None and self._kickoff(row).astimezone().date() == datetime.now().astimezone().date()]
         if rows:
             self.query_one(MatchDetailView).set_match(self._market_row(rows[0], market))
         self._render_tables()

@@ -169,6 +169,7 @@ class LiveOddsFeed:
             "home_team": str(event["home_team"]),
             "away_team": str(event["away_team"]),
             "league": league,
+            "commence_time": datetime.fromisoformat(str(event["commence_time"]).replace("Z", "+00:00")) if event.get("commence_time") else datetime.now(timezone.utc),
             **defaults,
             **fair,
             **{f"edge_{market}": edge for market, edge in edges.items()},

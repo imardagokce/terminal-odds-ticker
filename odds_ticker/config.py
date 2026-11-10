@@ -34,3 +34,12 @@ def save_api_key(api_key: str) -> None:
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+
+def save_bankroll(bankroll: float) -> None:
+    """Save the bankroll while retaining other configuration values."""
+    config = load_config()
+    config["bankroll"] = round(float(bankroll), 2)
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
