@@ -44,6 +44,19 @@ class LiveOddsFeedTests(unittest.TestCase):
         self.assertTrue(all(f"edge_{name}" in row for name in ("1X2", "Over / Under", "BTTS", "Asian Handicap")))
         self.assertEqual(feed.history("fixture-1", "home_win"), [2.1])
 
+    def test_parse_event_defaults_missing_btts_market(self) -> None:
+        event = {**PAYLOAD[0], "bookmakers": [{
+            **PAYLOAD[0]["bookmakers"][0],
+            "markets": [market for market in PAYLOAD[0]["bookmakers"][0]["markets"] if market["key"] != "btts"],
+        }]}
+        feed = LiveOddsFeed("test-key", client=httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=[]))))
+
+        row = feed._parse_event(event, "Trendyol SÃ¼per Lig")
+
+        record = MatchOdds.model_validate(row)
+        self.assertEqual(record.btts_yes, 1.90)
+        self.assertEqual(record.btts_no, 1.90)
+
     def test_fetch_snapshot_uses_http_and_caches_response(self) -> None:
         calls = []
 
@@ -59,7 +72,8 @@ class LiveOddsFeedTests(unittest.TestCase):
         self.assertEqual(first.height, len(SPORTS))
         self.assertEqual(second.height, first.height)
         self.assertEqual(len(calls), len(SPORTS))
-        self.assertEqual(calls[0].url.params["markets"], "h2h,totals,btts,spreads")
+        self.assertEqual(calls[0].url.params["markets"], "h2h,totals,spreads")
+        self.assertNotIn("btts", calls[0].url.params["markets"])
         client.close()
 
     def test_app_falls_back_to_mock_feed_when_api_errors(self) -> None:

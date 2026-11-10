@@ -27,7 +27,7 @@ SPORTS: dict[str, str] = {
     "soccer_spain_la_liga": "La Liga",
     "soccer_italy_serie_a": "Serie A",
 }
-MARKET_KEYS = ("h2h", "totals", "btts", "spreads")
+MARKET_KEYS = ("h2h", "totals", "spreads")
 LOGGER = logging.getLogger(__name__)
 
 
