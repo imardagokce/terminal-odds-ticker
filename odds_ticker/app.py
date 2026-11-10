@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from rich.text import Text
@@ -11,14 +12,15 @@ from textual.widgets import DataTable, Footer, Header, Input, Static, TabbedCont
 
 from odds_ticker.analytics import KELLY_FRACTIONS, calculate_fractional_kelly, cycle_kelly_fraction
 from odds_ticker.feed import FAIR_KEYS, MARKETS, MockOddsFeed
+from odds_ticker.fetcher import LiveOddsFeed
 from odds_ticker.widgets import LeagueFilterModal, MatchDetailView
 
 
 class OddsTickerApp(App[None]):
-    """Browse simulated football odds and value edges."""
+    """Browse football odds and value edges."""
 
     TITLE = "Odds Ticker"
-    SUB_TITLE = "Live football markets · mock feed"
+    SUB_TITLE = "Live football markets"
     CSS_PATH = "styles.tcss"
     BINDINGS = [("q", "quit", "Quit"), ("r", "refresh", "Refresh"), ("s", "cycle_sort", "Sort"), ("l", "select_leagues", "Leagues"), ("k", "cycle_kelly", "Kelly")]
     MARKET_IDS = {"tab-1x2": "1X2", "tab-ou": "Over / Under", "tab-btts": "BTTS", "tab-ah": "Asian Handicap"}
@@ -26,7 +28,9 @@ class OddsTickerApp(App[None]):
 
     def __init__(self) -> None:
         super().__init__()
-        self.feed = MockOddsFeed()
+        api_key = os.getenv("ODDS_API_KEY")
+        self.feed = LiveOddsFeed(api_key) if api_key else MockOddsFeed()
+        self.feed_indicator = "[LIVE API]" if api_key else "[MOCK FEED]"
         self._rows: dict[str, dict[str, Any]] = {}
         self._sort_mode = 0
         self._active_leagues: set[str] | None = None
@@ -48,6 +52,7 @@ class OddsTickerApp(App[None]):
         yield Footer()
 
     def on_mount(self) -> None:
+        self.sub_title = f"{self.feed_indicator} · Live football markets"
         for table in self.query(DataTable):
             table.add_columns("League", "Fixture", "Selection 1", "Selection 2", "Selection 3", "Edge")
         self.refresh_snapshot()
