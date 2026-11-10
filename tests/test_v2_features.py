@@ -38,7 +38,7 @@ class V2FeatureTests(unittest.TestCase):
         app._rows = {str(row["match_id"]): row for row in MockOddsFeed(seed=9).fetch_snapshot().iter_rows(named=True)}
         app._active_leagues = {"Premier League"}
         filtered = [row for row in app._rows.values() if row["league"] in app._active_leagues]
-        self.assertEqual(len(filtered), 2)
+        self.assertEqual(len(filtered), 3)
         self.assertTrue(all(row["league"] == "Premier League" for row in filtered))
 
 

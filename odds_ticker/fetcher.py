@@ -51,6 +51,7 @@ class LiveOddsFeed:
         self._cached_at = 0.0
         self._cached_snapshot = pl.DataFrame()
         self._last_fetch_failed = False
+        self._last_error: str | None = None
         self._history: dict[str, dict[str, deque[float]]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=15)))
 
     def close(self) -> None:
@@ -66,6 +67,7 @@ class LiveOddsFeed:
 
         rows: list[dict[str, Any]] = []
         self._last_fetch_failed = False
+        self._last_error = None
         for sport_key, league in SPORTS.items():
             try:
                 response = self._client.get(
@@ -93,6 +95,8 @@ class LiveOddsFeed:
             except httpx.HTTPStatusError as error:
                 self._last_fetch_failed = True
                 detail = error.response.text[:300].replace("\n", " ")
+                if self._last_error is None:
+                    self._last_error = f"HTTP {error.response.status_code}: {detail or error}"
                 LOGGER.error(
                     "Odds API request for %s failed with HTTP %s: %s",
                     league,
@@ -103,10 +107,14 @@ class LiveOddsFeed:
                 continue
             except httpx.RequestError as error:
                 self._last_fetch_failed = True
+                if self._last_error is None:
+                    self._last_error = str(error)
                 LOGGER.error("Odds API request for %s failed: %s", league, error)
                 continue
             except (ValueError, TypeError, KeyError) as error:
                 self._last_fetch_failed = True
+                if self._last_error is None:
+                    self._last_error = str(error)
                 # Keep useful results from other leagues if an endpoint is unavailable.
                 LOGGER.warning("Could not fetch odds for %s: %s", league, error)
                 continue

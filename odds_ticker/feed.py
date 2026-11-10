@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import polars as pl
@@ -25,12 +25,44 @@ class MockOddsFeed:
 
     def __init__(self, seed: int | None = None) -> None:
         self._random = random.Random(seed)
-        self._fixtures: list[dict[str, Any]] = [
-            {"match_id": "EPL-001", "home_team": "Arsenal", "away_team": "Liverpool", "league": "Premier League", "home_win": 2.35, "draw": 3.40, "away_win": 2.95, "over_2_5": 1.78, "under_2_5": 2.08, "btts_yes": 1.68, "btts_no": 2.18, "ah_home": 1.92, "ah_away": 1.94, "fair_home": .43, "fair_draw": .27, "fair_away": .30, "fair_over_2_5": .60, "fair_under_2_5": .40, "fair_btts_yes": .61, "fair_btts_no": .39, "fair_ah_home": .53, "fair_ah_away": .47},
-            {"match_id": "EPL-002", "home_team": "Manchester City", "away_team": "Aston Villa", "league": "Premier League", "home_win": 1.62, "draw": 4.20, "away_win": 5.10, "over_2_5": 1.62, "under_2_5": 2.35, "btts_yes": 1.72, "btts_no": 2.10, "ah_home": 1.73, "ah_away": 2.12, "fair_home": .62, "fair_draw": .22, "fair_away": .16, "fair_over_2_5": .64, "fair_under_2_5": .36, "fair_btts_yes": .59, "fair_btts_no": .41, "fair_ah_home": .61, "fair_ah_away": .39},
-            {"match_id": "UCL-001", "home_team": "Real Madrid", "away_team": "Bayern Munich", "league": "Champions League", "home_win": 2.15, "draw": 3.55, "away_win": 3.20, "over_2_5": 1.82, "under_2_5": 2.02, "btts_yes": 1.70, "btts_no": 2.14, "ah_home": 1.86, "ah_away": 2.00, "fair_home": .46, "fair_draw": .25, "fair_away": .29, "fair_over_2_5": .58, "fair_under_2_5": .42, "fair_btts_yes": .60, "fair_btts_no": .40, "fair_ah_home": .54, "fair_ah_away": .46},
-            {"match_id": "UCL-002", "home_team": "Inter", "away_team": "Paris Saint-Germain", "league": "Champions League", "home_win": 2.75, "draw": 3.25, "away_win": 2.55, "over_2_5": 1.95, "under_2_5": 1.88, "btts_yes": 1.75, "btts_no": 2.05, "ah_home": 2.04, "ah_away": 1.82, "fair_home": .35, "fair_draw": .28, "fair_away": .37, "fair_over_2_5": .51, "fair_under_2_5": .49, "fair_btts_yes": .57, "fair_btts_no": .43, "fair_ah_home": .45, "fair_ah_away": .55},
+        fixtures = [
+            ("TUR", "Galatasaray", "Fenerbahçe", "Trendyol Süper Lig", (2.05, 3.45, 3.35)),
+            ("TUR", "Beşiktaş", "Trabzonspor", "Trendyol Süper Lig", (2.10, 3.35, 3.25)),
+            ("EPL", "Arsenal", "Liverpool", "Premier League", (2.35, 3.40, 2.95)),
+            ("EPL", "Manchester City", "Aston Villa", "Premier League", (1.62, 4.20, 5.10)),
+            ("EPL", "Chelsea", "Tottenham", "Premier League", (2.05, 3.65, 3.25)),
+            ("UCL", "Real Madrid", "Bayern Munich", "Champions League", (2.15, 3.55, 3.20)),
+            ("UCL", "Inter", "Paris Saint-Germain", "Champions League", (2.75, 3.25, 2.55)),
+            ("GER", "Bayern Munich", "Dortmund", "Bundesliga", (1.72, 4.10, 4.35)),
+            ("GER", "Bayer Leverkusen", "RB Leipzig", "Bundesliga", (1.95, 3.60, 3.60)),
+            ("ESP", "Real Madrid", "Barcelona", "La Liga", (2.15, 3.50, 3.25)),
+            ("ESP", "Atletico Madrid", "Sevilla", "La Liga", (1.80, 3.55, 4.70)),
+            ("ITA", "Juventus", "AC Milan", "Serie A", (2.30, 3.10, 3.35)),
+            ("FRA", "PSG", "Marseille", "Ligue 1", (1.55, 4.30, 5.80)),
+            ("NED", "Ajax", "PSV", "Eredivisie", (2.55, 3.80, 2.35)),
+            ("POR", "Benfica", "Porto", "Primeira Liga", (2.00, 3.35, 3.70)),
         ]
+        now = datetime.now(timezone.utc)
+        self._fixtures: list[dict[str, Any]] = []
+        for index, (prefix, home, away, league, result_odds) in enumerate(fixtures):
+            odds: dict[str, float] = {
+                "home_win": result_odds[0], "draw": result_odds[1], "away_win": result_odds[2],
+                "over_2_5": 1.65 + (index % 5) * .08, "under_2_5": 2.30 - (index % 4) * .07,
+                "btts_yes": 1.62 + (index % 4) * .09, "btts_no": 2.25 - (index % 5) * .08,
+                "ah_home": 1.72 + (index % 5) * .07, "ah_away": 2.16 - (index % 4) * .06,
+            }
+            fixture: dict[str, Any] = {
+                "match_id": (f"EPL-{('Arsenal', 'Manchester City', 'Chelsea').index(home) + 1:03d}"
+                             if home in {"Arsenal", "Manchester City", "Chelsea"} else f"{prefix}-{index + 1:03d}"),
+                "home_team": home, "away_team": away,
+                "league": league, "commence_time": now + timedelta(days=index + 1, hours=index % 8), **odds,
+            }
+            for keys, _ in MARKETS.values():
+                implied = [1 / odds[key] for key in keys]
+                total = sum(implied)
+                for key, probability in zip(keys, implied):
+                    fixture[FAIR_KEYS.get(key, f"fair_{key}")] = probability / total
+            self._fixtures.append(fixture)
         self._history: dict[str, dict[str, deque[float]]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=15)))
         self._previous: dict[str, dict[str, float]] = defaultdict(dict)
 

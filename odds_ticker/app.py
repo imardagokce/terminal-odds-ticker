@@ -125,7 +125,11 @@ class OddsTickerApp(App[None]):
         if isinstance(self.feed, LiveOddsFeed) and (
             snapshot.is_empty() or self.feed._last_fetch_failed
         ):
-            self.notify("API returned 0 fixtures or failed. Falling back to Mock Feed.", severity="warning")
+            if self.feed._last_error:
+                message = f"Live API Failed [{self.feed._last_error}] - Switching to Mock Feed"
+            else:
+                message = "Live API returned 0 fixtures - Switching to Mock Feed"
+            self.notify(message, severity="error", timeout=10)
             self.feed.close()
             self.feed = MockOddsFeed()
             self.feed_indicator = "[MOCK FEED]"

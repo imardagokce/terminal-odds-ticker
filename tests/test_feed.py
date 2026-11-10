@@ -1,7 +1,7 @@
 """Tests for the mock odds feed and its validated records."""
 
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 
 import polars as pl
 
@@ -13,7 +13,10 @@ class MockOddsFeedTests(unittest.TestCase):
     def test_snapshot_contains_valid_fixture_data(self) -> None:
         snapshot = MockOddsFeed(seed=7).fetch_snapshot()
         self.assertIsInstance(snapshot, pl.DataFrame)
-        self.assertEqual(snapshot.height, 4)
+        self.assertGreaterEqual(snapshot.height, 15)
+        self.assertGreaterEqual(snapshot["league"].n_unique(), 5)
+        self.assertTrue((snapshot["commence_time"] > datetime.now(timezone.utc)).all())
+        self.assertTrue({"over_2_5", "under_2_5", "btts_yes", "btts_no", "ah_home", "ah_away"}.issubset(snapshot.columns))
         self.assertTrue({"home_trend", "draw_trend", "away_trend", "value_edge"}.issubset(snapshot.columns))
         record = MatchOdds.model_validate(snapshot.row(0, named=True))
         self.assertIsInstance(record.timestamp, datetime)
