@@ -11,8 +11,9 @@ Compare simulated market prices, follow odds movement and explore Kelly staking 
 ![Textual](https://img.shields.io/badge/TUI-Textual-6741D9?style=for-the-badge)
 ![Polars](https://img.shields.io/badge/Data-Polars-CD792C?style=for-the-badge)
 ![MIT License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+![Security Policy](https://img.shields.io/badge/Security-Policy-2ea44f?style=for-the-badge&logo=github)
 
-[Overview](#overview) · [What's New](#version-200-whats-new) · [Features](#features) · [Quick Start](#quick-start) · [Keybindings](#keybindings) · [License](#license)
+[Overview](#overview) · [What's New](#version-200-whats-new) · [Features](#features) · [Quick Start](#quick-start) · [Live API](#live-api) · [Keybindings](#keybindings) · [Security](SECURITY.md) · [License](#license)
 
 </div>
 
@@ -55,6 +56,12 @@ To run the test suite:
 ```bash
 python -m unittest discover tests
 ```
+
+## Live API
+
+Set `ODDS_API_KEY` to enable live odds. Requests use decimal odds and cover the `eu,uk` regions, including European and UK bookmaker markets for supported leagues. The feed requests head-to-head, totals, BTTS and spreads markets.
+
+If no fixtures appear, check that the key is valid, the account has remaining quota, and fixtures are currently available in the selected regions. See the [Security Policy](SECURITY.md) for credential handling and vulnerability reporting.
 
 ## Keybindings
 

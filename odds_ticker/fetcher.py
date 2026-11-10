@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import logging
 import time
 from collections import defaultdict, deque
 from datetime import datetime, timezone
@@ -27,6 +28,7 @@ SPORTS: dict[str, str] = {
     "soccer_italy_serie_a": "Serie A",
 }
 MARKET_KEYS = ("h2h", "totals", "btts", "spreads")
+LOGGER = logging.getLogger(__name__)
 
 
 class LiveOddsFeed:
@@ -68,19 +70,41 @@ class LiveOddsFeed:
                     f"{BASE_URL}/{sport_key}/odds",
                     params={
                         "apiKey": self.api_key,
-                        "regions": "uk",
+                        "regions": "eu,uk",
                         "markets": ",".join(MARKET_KEYS),
                         "oddsFormat": "decimal",
                         "dateFormat": "iso",
                     },
                 )
-                response.raise_for_status()
+                if response.status_code != 200:
+                    detail = response.text[:300].replace("\n", " ")
+                    LOGGER.warning(
+                        "Odds API request for %s returned HTTP %s: %s",
+                        league,
+                        response.status_code,
+                        detail or response.reason_phrase,
+                    )
+                    response.raise_for_status()
                 payload = response.json()
                 if isinstance(payload, list):
                     rows.extend(self._parse_event(event, league) for event in payload)
-            except (httpx.HTTPError, ValueError, TypeError, KeyError):
+            except httpx.HTTPStatusError as error:
+                if error.response.status_code in (401, 403):
+                    LOGGER.error("Odds API authentication failed for %s; check the API key.", league)
+                elif error.response.status_code == 429:
+                    LOGGER.error("Odds API quota exceeded for %s; check the account quota.", league)
                 # Keep useful results from other leagues if an endpoint is unavailable.
                 continue
+            except (httpx.HTTPError, ValueError, TypeError, KeyError) as error:
+                # Keep useful results from other leagues if an endpoint is unavailable.
+                LOGGER.warning("Could not fetch odds for %s: %s", league, error)
+                continue
+
+        if not rows:
+            LOGGER.warning(
+                "The Odds API returned no fixtures. Check API quota and key, and confirm "
+                "fixtures are available in the eu,uk regions."
+            )
 
         self._cached_snapshot = pl.DataFrame(rows) if rows else pl.DataFrame()
         self._cached_at = now_monotonic
