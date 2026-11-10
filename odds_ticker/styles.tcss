@@ -41,6 +41,7 @@ TabPane { height: 1fr; padding: 0; }
 LeagueFilterModal { align: center middle; background: #000000 65%; }
 ApiKeyModal { align: center middle; background: #000000 65%; }
 BankrollModal { align: center middle; background: #000000 65%; }
+SortSelectionModal { align: center middle; background: #000000 65%; }
 
 #api-key-modal {
     width: 72;
@@ -63,6 +64,19 @@ ApiKeyModal Button { margin: 0 1 0 0; }
 
 BankrollModal Input { margin-bottom: 1; }
 BankrollModal Button { margin: 0 1 0 0; }
+
+#sort-modal {
+    width: 76;
+    height: auto;
+    border: round #7dd3fc;
+    background: #101720;
+    padding: 1 2;
+}
+
+SortSelectionModal Button {
+    width: 1fr;
+    margin: 0 0 1 0;
+}
 
 #league-modal {
     width: 56;

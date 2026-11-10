@@ -17,7 +17,7 @@ from odds_ticker.analytics import KELLY_FRACTIONS, calculate_fractional_kelly, c
 from odds_ticker.config import load_config, save_api_key, save_bankroll
 from odds_ticker.feed import FAIR_KEYS, MARKETS, MockOddsFeed
 from odds_ticker.fetcher import LiveOddsFeed
-from odds_ticker.widgets import ApiKeyModal, BankrollModal, LeagueFilterModal, MatchDetailView
+from odds_ticker.widgets import ApiKeyModal, BankrollModal, LeagueFilterModal, MatchDetailView, SortSelectionModal
 
 
 class OddsTickerApp(App[None]):
@@ -30,7 +30,7 @@ class OddsTickerApp(App[None]):
         if getattr(sys, "frozen", False)
         else Path(__file__).parent / "styles.tcss"
     )
-    BINDINGS = [("q", "quit", "Quit"), ("r", "refresh", "Refresh"), ("s", "cycle_sort", "Sort"), ("l", "select_leagues", "Leagues"), ("k", "cycle_kelly", "Kelly"), ("t", "toggle_today_filter", "Today/All"), ("b", "set_bankroll", "Bankroll")]
+    BINDINGS = [("q", "quit", "Quit"), ("r", "refresh", "Refresh"), ("s", "sort", "Sort"), ("l", "select_leagues", "Leagues"), ("k", "cycle_kelly", "Kelly"), ("t", "toggle_today_filter", "Today/All"), ("b", "set_bankroll", "Bankroll")]
     MARKET_IDS = {"tab-1x2": "1X2", "tab-ou": "Over / Under", "tab-btts": "BTTS", "tab-ah": "Asian Handicap"}
     KELLY_FRACTIONS = KELLY_FRACTIONS
 
@@ -42,7 +42,7 @@ class OddsTickerApp(App[None]):
         self.feed_indicator = "[LIVE API]" if api_key else "[MOCK FEED]"
         self._refresh_timer_started = False
         self._rows: dict[str, dict[str, Any]] = {}
-        self._sort_mode = 0
+        self.current_sort = "value_edge"
         self._active_leagues: set[str] | None = None
         self._kelly_index = 0
         self._today_only = False
@@ -102,10 +102,14 @@ class OddsTickerApp(App[None]):
         """Fetch and display a fresh market snapshot."""
         self.refresh_snapshot()
 
-    def action_cycle_sort(self) -> None:
-        """Cycle edge, win probability, kickoff and odds sorting."""
-        self._sort_mode = (self._sort_mode + 1) % 4
-        self._render_tables()
+    def action_sort(self) -> None:
+        """Open the sort mode chooser."""
+        self.push_screen(SortSelectionModal(current_sort=self.current_sort), self._set_sort)
+
+    def _set_sort(self, selected_sort: str | None) -> None:
+        if selected_sort is not None:
+            self.current_sort = selected_sort
+            self._render_tables()
 
     def action_cycle_kelly(self) -> None:
         """Cycle quarter, half and full Kelly stake guidance."""
@@ -170,13 +174,13 @@ class OddsTickerApp(App[None]):
             rows = [row for row in rows if row["league"] in self._active_leagues]
         if self._today_only:
             rows = [row for row in rows if self._kickoff(row) is not None and self._kickoff(row).astimezone().date() == datetime.now().astimezone().date()]
-        sort_keys = (
-            lambda row: -float(row["value_edge"]),
-            lambda row: -1 / float(row["value_odds"]),
-            lambda row: self._kickoff(row).timestamp() if self._kickoff(row) else float("inf"),
-            lambda row: float(row["value_odds"]),
-        )
-        rows.sort(key=sort_keys[self._sort_mode])
+        sort_keys = {
+            "value_edge": lambda row: -float(row["value_edge"]),
+            "win_probability": lambda row: -1 / float(row["value_odds"]),
+            "kickoff_time": lambda row: self._kickoff(row).timestamp() if self._kickoff(row) else float("inf"),
+            "odds": lambda row: float(row["value_odds"]),
+        }
+        rows.sort(key=sort_keys[self.current_sort])
         for tab_id, market in self.MARKET_IDS.items():
             table = self.query_one(f"#table-{tab_id}", DataTable)
             table.clear()
@@ -192,7 +196,7 @@ class OddsTickerApp(App[None]):
                 table.add_row(str(row["league"]), Text(f"{row['home_team']} v {row['away_team']}"), time_status, *(f"{price:.2f}" for price in prices), Text(f"{edge:+.1f}%", style=f"bold {colour}"), key=str(row["match_id"]))
         active = self.query_one("#market-tabs", TabbedContent).active
         market = self.MARKET_IDS.get(str(active), "1X2")
-        sort_label = ("Value Edge ↓", "Win Prob ↓", "Kickoff Time ↑", "Odds ↑")[self._sort_mode]
+        sort_label = dict((key, label.split("  ·  ")[0]) for key, label in SortSelectionModal.SORT_OPTIONS)[self.current_sort]
         self.sub_title = f"{self.feed_indicator} · {'[TODAY ONLY]' if self._today_only else '[ALL FIXTURES]'} · {sort_label} · Live football markets"
         self.query_one("#market-title", Static).update(f"{market.upper()} · {sort_label} · {len(rows)} fixtures · s SORT · t TODAY/ALL · b BANKROLL · l LEAGUES · k {self.KELLY_FRACTIONS[self._kelly_index]:.0%} KELLY")
         if rows:

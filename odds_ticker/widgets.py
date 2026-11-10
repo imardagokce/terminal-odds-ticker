@@ -76,6 +76,41 @@ class LeagueFilterModal(ModalScreen[set[str] | None]):
         self.dismiss(None)
 
 
+class SortSelectionModal(ModalScreen[str | None]):
+    """Choose the active fixture sorting mode."""
+
+    BINDINGS = [("escape", "cancel", "Cancel"), ("s", "cancel", "Cancel")]
+    SORT_OPTIONS = (
+        ("value_edge", "Value Edge ↓  ·  Highest value edge percentage"),
+        ("win_probability", "Win Probability ↓  ·  Highest implied win probability"),
+        ("kickoff_time", "⏰ Kickoff Time ↑  ·  Chronological order"),
+        ("odds", "Decimal Odds ↑  ·  Ascending odds"),
+    )
+
+    def __init__(self, current_sort: str) -> None:
+        super().__init__()
+        self.current_sort = current_sort
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="sort-modal"):
+            yield Static("SELECT SORT MODE", classes="modal-title")
+            for sort_key, label in self.SORT_OPTIONS:
+                yield Button(
+                    label,
+                    variant="primary" if sort_key == self.current_sort else "default",
+                    id=f"sort-{sort_key}",
+                )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        sort_key = str(event.button.id or "").removeprefix("sort-")
+        if sort_key in {key for key, _ in self.SORT_OPTIONS}:
+            self.dismiss(sort_key)
+
+    def action_cancel(self) -> None:
+        """Close the chooser without changing the active sort."""
+        self.dismiss(None)
+
+
 class BankrollModal(ModalScreen[float | None]):
     """Edit the bankroll used for stake guidance."""
 
