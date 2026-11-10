@@ -23,6 +23,8 @@ def main() -> None:
         str(ROOT),
         "--name",
         "odds-ticker",
+        "--collect-submodules",
+        "textual",
         "--add-data",
         f"{ROOT / 'odds_ticker' / 'styles.tcss'}{separator}odds_ticker",
         str(ROOT / "odds_ticker" / "app.py"),

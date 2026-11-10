@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import sys
+from pathlib import Path
 from typing import Any
 
 from rich.text import Text
@@ -22,7 +24,11 @@ class OddsTickerApp(App[None]):
 
     TITLE = "Odds Ticker"
     SUB_TITLE = "Live football markets"
-    CSS_PATH = "styles.tcss"
+    CSS_PATH = (
+        Path(sys._MEIPASS) / "odds_ticker" / "styles.tcss"
+        if getattr(sys, "frozen", False)
+        else Path(__file__).parent / "styles.tcss"
+    )
     BINDINGS = [("q", "quit", "Quit"), ("r", "refresh", "Refresh"), ("s", "cycle_sort", "Sort"), ("l", "select_leagues", "Leagues"), ("k", "cycle_kelly", "Kelly")]
     MARKET_IDS = {"tab-1x2": "1X2", "tab-ou": "Over / Under", "tab-btts": "BTTS", "tab-ah": "Asian Handicap"}
     KELLY_FRACTIONS = KELLY_FRACTIONS
