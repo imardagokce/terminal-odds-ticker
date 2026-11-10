@@ -151,6 +151,13 @@ MatchDetailView {
     border: round #ffb86c;
 }
 
+#risk-profile {
+    height: auto;
+    padding: 0 1 1 1;
+    margin-bottom: 1;
+    background: #101720;
+}
+
 #movement-log {
     height: auto;
     padding-top: 1;

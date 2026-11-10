@@ -103,8 +103,8 @@ class OddsTickerApp(App[None]):
         self.refresh_snapshot()
 
     def action_cycle_sort(self) -> None:
-        """Cycle value edge, first outcome price and league sorting."""
-        self._sort_mode = (self._sort_mode + 1) % 3
+        """Cycle edge, win probability, kickoff and odds sorting."""
+        self._sort_mode = (self._sort_mode + 1) % 4
         self._render_tables()
 
     def action_cycle_kelly(self) -> None:
@@ -170,7 +170,12 @@ class OddsTickerApp(App[None]):
             rows = [row for row in rows if row["league"] in self._active_leagues]
         if self._today_only:
             rows = [row for row in rows if self._kickoff(row) is not None and self._kickoff(row).astimezone().date() == datetime.now().astimezone().date()]
-        sort_keys = (lambda row: -float(row["value_edge"]), lambda row: float(row["home_win"]), lambda row: str(row["league"]))
+        sort_keys = (
+            lambda row: -float(row["value_edge"]),
+            lambda row: -1 / float(row["value_odds"]),
+            lambda row: self._kickoff(row).timestamp() if self._kickoff(row) else float("inf"),
+            lambda row: float(row["value_odds"]),
+        )
         rows.sort(key=sort_keys[self._sort_mode])
         for tab_id, market in self.MARKET_IDS.items():
             table = self.query_one(f"#table-{tab_id}", DataTable)
@@ -187,8 +192,9 @@ class OddsTickerApp(App[None]):
                 table.add_row(str(row["league"]), Text(f"{row['home_team']} v {row['away_team']}"), time_status, *(f"{price:.2f}" for price in prices), Text(f"{edge:+.1f}%", style=f"bold {colour}"), key=str(row["match_id"]))
         active = self.query_one("#market-tabs", TabbedContent).active
         market = self.MARKET_IDS.get(str(active), "1X2")
-        self.sub_title = f"{self.feed_indicator} · {'[TODAY ONLY]' if self._today_only else '[ALL FIXTURES]'} · Live football markets"
-        self.query_one("#market-title", Static).update(f"{market.upper()} · {'Value edge ↓' if self._sort_mode == 0 else 'Odds ↑' if self._sort_mode == 1 else 'League A–Z'} · {len(rows)} fixtures · t TODAY/ALL · b BANKROLL · l LEAGUES · k {self.KELLY_FRACTIONS[self._kelly_index]:.0%} KELLY")
+        sort_label = ("Value Edge ↓", "Win Prob ↓", "Kickoff Time ↑", "Odds ↑")[self._sort_mode]
+        self.sub_title = f"{self.feed_indicator} · {'[TODAY ONLY]' if self._today_only else '[ALL FIXTURES]'} · {sort_label} · Live football markets"
+        self.query_one("#market-title", Static).update(f"{market.upper()} · {sort_label} · {len(rows)} fixtures · s SORT · t TODAY/ALL · b BANKROLL · l LEAGUES · k {self.KELLY_FRACTIONS[self._kelly_index]:.0%} KELLY")
         if rows:
             self.query_one(f"#table-{active}", DataTable).move_cursor(row=0)
             self.query_one(MatchDetailView).set_match(self._market_row(rows[0], market))

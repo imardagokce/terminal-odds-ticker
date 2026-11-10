@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from rich.text import Text
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
@@ -121,6 +122,7 @@ class MatchDetailView(Widget):
         with Vertical():
             yield Static("Select a fixture to inspect its market.", id="detail-content")
             yield Static("", id="bet-recommendation")
+            yield Static("", id="risk-profile")
             yield Sparkline([], id="movement-sparkline")
             yield Static("Odds movement", id="movement-log")
 
@@ -142,6 +144,7 @@ class MatchDetailView(Widget):
             recommendation = self.query_one("#bet-recommendation", Static)
             recommendation.update("NO VALUE DETECTED (PASS)")
             recommendation.set_class(True, "pass")
+            self.query_one("#risk-profile", Static).update("")
 
     def set_bankroll(self, bankroll: float) -> None:
         """Set bankroll and refresh the recommendation."""
@@ -171,12 +174,21 @@ class MatchDetailView(Widget):
                    f"Updated {match['timestamp'].strftime('%H:%M:%S UTC')}")
         self.query_one("#detail-content", Static).update(content)
         recommendation = self.query_one("#bet-recommendation", Static)
+        risk_profile = self.query_one("#risk-profile", Static)
+        win_probability = calculate_implied_probability(float(match["value_odds"]))
+        loss_risk = 1.0 - win_probability
+        risk_text = Text()
+        risk_text.append(f"WIN PROBABILITY: {win_probability:.1%}\n", style="bold green")
+        risk_text.append(f"LOSS RISK: {loss_risk:.1%}", style="bold red")
         if edge > 0:
             recommendation.update(f"RECOMMENDED BET: {match['value_pick']} @ {float(match['value_odds']):.2f}\nSTAKE AMOUNT: {stake_text}")
             recommendation.set_class(True, "recommended")
+            risk_level = "LOW RISK" if win_probability > 0.70 else "MEDIUM RISK" if win_probability >= 0.50 else "HIGH RISK / HIGH VALUE"
+            risk_text.append(f"\n{risk_level}", style="bold yellow")
         else:
             recommendation.update("NO VALUE DETECTED (PASS)")
             recommendation.set_class(True, "pass")
+        risk_profile.update(risk_text)
         market_keys = {
             "1X2": {"Home": "home_win", "Draw": "draw", "Away": "away_win"}.get(str(match["value_pick"]), "home_win"),
             "Over / Under": "over_2_5" if match["value_pick"] == "Over 2.5" else "under_2_5",
