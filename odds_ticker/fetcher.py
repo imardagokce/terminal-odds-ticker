@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import logging
 import time
+import asyncio
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from typing import Any
@@ -39,14 +40,15 @@ class LiveOddsFeed:
         api_key: str | None = None,
         *,
         ttl: float = 45.0,
-        client: httpx.Client | None = None,
+        client: httpx.AsyncClient | httpx.Client | None = None,
         timeout: float = 10.0,
     ) -> None:
         self.api_key = api_key or os.getenv("ODDS_API_KEY", "")
         if not self.api_key:
             raise ValueError("An Odds API key is required for LiveOddsFeed")
         self.ttl = max(0.0, min(float(ttl), 60.0))
-        self._client = client or httpx.Client(timeout=timeout)
+        self._sync_client = client if isinstance(client, httpx.Client) else None
+        self._client = httpx.AsyncClient(timeout=timeout) if self._sync_client or client is None else client
         self._owns_client = client is None
         self._cached_at = 0.0
         self._cached_snapshot = pl.DataFrame()
@@ -54,71 +56,77 @@ class LiveOddsFeed:
         self._last_error: str | None = None
         self._history: dict[str, dict[str, deque[float]]] = defaultdict(lambda: defaultdict(lambda: deque(maxlen=15)))
 
-    def close(self) -> None:
+    async def aclose(self) -> None:
         """Close the HTTP connection pool owned by this feed."""
         if self._owns_client:
-            self._client.close()
+            await self._client.aclose()
+
+    def close(self) -> None:
+        """Compatibility close method for synchronous callers."""
+        if self._sync_client is not None and self._owns_client:
+            self._sync_client.close()
+        elif self._owns_client:
+            asyncio.run(self._client.aclose())
 
     def fetch_snapshot(self) -> pl.DataFrame:
+        """Synchronous compatibility entry point for scripts and legacy callers."""
+        return asyncio.run(self.fetch_snapshot_async())
+
+    async def fetch_snapshot_async(self) -> pl.DataFrame:
         """Return the latest cached or newly fetched odds snapshot."""
         now_monotonic = time.monotonic()
         if self._cached_at and now_monotonic - self._cached_at < self.ttl:
             return self._cached_snapshot.clone()
 
         rows: list[dict[str, Any]] = []
-        successful_requests = 0
         self._last_fetch_failed = False
         self._last_error = None
-        for sport_key, league in SPORTS.items():
+        async def fetch_league(sport_key: str, league: str) -> tuple[str, list[dict[str, Any]] | None, str | None]:
             try:
-                response = self._client.get(
-                    f"{BASE_URL}/{sport_key}/odds",
-                    params={
+                url = f"{BASE_URL}/{sport_key}/odds"
+                params = {
                         "apiKey": self.api_key,
                         "regions": "eu,uk",
                         "markets": ",".join(MARKET_KEYS),
                         "oddsFormat": "decimal",
                         "dateFormat": "iso",
-                    },
-                )
+                    }
+                response = await asyncio.to_thread(self._sync_client.get, url, params=params) if self._sync_client else await self._client.get(url, params=params)
                 if response.status_code != 200:
-                    detail = response.text[:300].replace("\n", " ")
                     if response.status_code == 404:
                         LOGGER.warning("Sport key '%s' unknown or inactive, skipping", sport_key)
-                        continue
+                        return sport_key, None, None
                     if response.status_code in (401, 429):
-                        self._last_fetch_failed = True
-                        self._last_error = f"HTTP {response.status_code}: {detail or response.reason_phrase}"
-                        LOGGER.error("Odds API global request failure for %s: HTTP %s: %s", sport_key, response.status_code, detail or response.reason_phrase)
-                        break
-                    LOGGER.warning(
-                        "Odds API request for %s returned HTTP %s: %s",
-                        league,
-                        response.status_code,
-                        detail or response.reason_phrase,
-                    )
+                        LOGGER.error("Odds API request for %s returned HTTP %s", sport_key, response.status_code)
+                        return sport_key, None, f"HTTP {response.status_code}"
+                    LOGGER.warning("Odds API request for %s returned HTTP %s", sport_key, response.status_code)
                     response.raise_for_status()
-                successful_requests += 1
                 payload = response.json()
-                if isinstance(payload, list):
-                    rows.extend(self._parse_event(event, league) for event in payload)
+                parsed = [self._parse_event(event, league) for event in payload if isinstance(event, dict)] if isinstance(payload, list) else []
+                return sport_key, parsed, None
             except httpx.HTTPStatusError as error:
-                detail = error.response.text[:300].replace("\n", " ")
-                LOGGER.error(
-                    "Odds API request for %s failed with HTTP %s: %s",
-                    league,
-                    error.response.status_code,
-                    detail or error,
-                )
-                # Keep useful results from other leagues if an endpoint is unavailable.
-                continue
+                LOGGER.error("Odds API request for %s failed with HTTP %s", sport_key, error.response.status_code)
+                return sport_key, None, None
             except httpx.RequestError as error:
-                LOGGER.error("Odds API request for %s failed: %s", league, error)
+                LOGGER.error("Odds API request for %s failed (%s)", sport_key, type(error).__name__)
+                return sport_key, None, None
+            except (ValueError, TypeError, KeyError, OverflowError):
+                LOGGER.warning("Could not parse odds response for %s", sport_key)
+                return sport_key, None, None
+
+        results = await asyncio.gather(*(fetch_league(key, league) for key, league in SPORTS.items()), return_exceptions=True)
+        successful_requests = 0
+        for result in results:
+            if isinstance(result, BaseException):
+                LOGGER.error("Odds API request failed (%s)", type(result).__name__)
                 continue
-            except (ValueError, TypeError, KeyError) as error:
-                # Keep useful results from other leagues if an endpoint is unavailable.
-                LOGGER.warning("Could not fetch odds for %s: %s", league, error)
-                continue
+            _, league_rows, failure = result
+            if failure:
+                self._last_fetch_failed = True
+                self._last_error = failure
+            elif league_rows is not None:
+                successful_requests += 1
+                rows.extend(league_rows)
 
         if not self._last_fetch_failed and successful_requests == 0:
             self._last_fetch_failed = True
@@ -126,8 +134,7 @@ class LiveOddsFeed:
 
         if not rows:
             LOGGER.warning(
-                "The Odds API returned no fixtures. Check API quota and key, and confirm "
-                "fixtures are available in the eu,uk regions."
+                "The Odds API returned no fixtures. Check API quota and fixture availability."
             )
 
         self._cached_snapshot = pl.DataFrame(rows) if rows else pl.DataFrame()

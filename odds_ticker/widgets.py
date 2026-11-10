@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import math
 from typing import Any
 
 from rich.text import Text
@@ -132,11 +133,13 @@ class BankrollModal(ModalScreen[float | None]):
         if event.button.id == "save-bankroll":
             try:
                 value = float(self.query_one("#bankroll-modal-input", Input).value)
-            except ValueError:
+            except (ValueError, TypeError):
                 self.query_one("#bankroll-modal-input", Input).focus()
                 return
-            if value >= 0:
+            if math.isfinite(value) and value >= 0:
                 self.dismiss(value)
+            else:
+                self.query_one("#bankroll-modal-input", Input).focus()
         elif event.button.id == "cancel-bankroll":
             self.dismiss(None)
 
@@ -197,16 +200,23 @@ class MatchDetailView(Widget):
             stake_text = f"₺{stake:,.2f} ({stake / bankroll:.1%} Bankroll)" if bankroll > 0 else "₺0.00 (0.0% Bankroll)"
         except (ValueError, TypeError, KeyError):
             stake_text = "Enter a valid bankroll"
-        prices = (float(match["home_win"]), float(match["draw"]), float(match["away_win"]))
-        edge = float(match["value_edge"])
+        def price(key: str) -> float:
+            try:
+                value = float(match.get(key, 1.90))
+                return value if math.isfinite(value) and value > 1 else 1.90
+            except (ValueError, TypeError):
+                return 1.90
+
+        prices = tuple(price(key) for key in ("home_win", "draw", "away_win"))
+        edge = float(match.get("value_edge", 0.0) or 0.0)
         content = (f"[bold]{match['home_team']} v {match['away_team']}[/bold]\n{match['league']} · {market}\n\n"
                    f"1X2  {prices[0]:.2f}  /  {prices[1]:.2f}  /  {prices[2]:.2f}\n"
-                   f"Over / Under 2.5  {match['over_2_5']:.2f}  /  {match['under_2_5']:.2f}\n"
-                   f"BTTS Yes / No  {match['btts_yes']:.2f}  /  {match['btts_no']:.2f}\n"
-                   f"Asian Handicap  {match['ah_home']:.2f}  /  {match['ah_away']:.2f}\n\n"
+                   f"Over / Under 2.5  {price('over_2_5'):.2f}  /  {price('under_2_5'):.2f}\n"
+                   f"BTTS Yes / No  {price('btts_yes'):.2f}  /  {price('btts_no'):.2f}\n"
+                   f"Asian Handicap  {price('ah_home'):.2f}  /  {price('ah_away'):.2f}\n\n"
                    f"1X2 bookmaker vig  {calculate_overround(*prices):+.2f}%\n"
                    f"Value edge  {edge:+.2f}% · {match['value_pick']}\n\n"
-                   f"Updated {match['timestamp'].strftime('%H:%M:%S UTC')}")
+                   f"Updated {getattr(match.get('timestamp'), 'strftime', lambda *_: 'Unknown')('%H:%M:%S UTC')}")
         self.query_one("#detail-content", Static).update(content)
         recommendation = self.query_one("#bet-recommendation", Static)
         risk_profile = self.query_one("#risk-profile", Static)

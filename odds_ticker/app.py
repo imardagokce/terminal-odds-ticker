@@ -12,6 +12,7 @@ from rich.text import Text
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.widgets import DataTable, Footer, Header, Static, TabbedContent, TabPane
+from textual import work
 
 from odds_ticker.analytics import KELLY_FRACTIONS, calculate_fractional_kelly, cycle_kelly_fraction
 from odds_ticker.config import load_config, save_api_key, save_bankroll
@@ -30,7 +31,7 @@ class OddsTickerApp(App[None]):
         if getattr(sys, "frozen", False)
         else Path(__file__).parent / "styles.tcss"
     )
-    BINDINGS = [("q", "quit", "Quit"), ("r", "refresh", "Refresh"), ("s", "sort", "Sort"), ("l", "select_leagues", "Leagues"), ("k", "cycle_kelly", "Kelly"), ("t", "toggle_today_filter", "Today/All"), ("b", "set_bankroll", "Bankroll")]
+    BINDINGS = [("q", "quit", "Quit"), ("r", "refresh", "Refresh"), ("s", "sort", "Sort"), ("l", "select_leagues", "Leagues"), ("k", "cycle_kelly", "Kelly"), ("t", "toggle_today_filter", "Today/All"), ("b", "set_bankroll", "Bankroll"), ("ctrl+p", "command_palette", "Commands")]
     MARKET_IDS = {"tab-1x2": "1X2", "tab-ou": "Over / Under", "tab-btts": "BTTS", "tab-ah": "Asian Handicap"}
     KELLY_FRACTIONS = KELLY_FRACTIONS
 
@@ -147,22 +148,51 @@ class OddsTickerApp(App[None]):
             self._render_tables()
 
     def refresh_snapshot(self) -> None:
-        """Update cached fixtures, all market tables and exposure guidance."""
-        snapshot = self.feed.fetch_snapshot()
+        """Schedule a snapshot refresh without blocking Textual's event loop."""
+        if isinstance(self.feed, LiveOddsFeed):
+            self._refresh_live()
+            return
+        self._apply_snapshot(self.feed.fetch_snapshot())
+
+    @work(exclusive=True, group="feed-refresh")
+    async def _refresh_live(self) -> None:
+        feed = self.feed
+        if not isinstance(feed, LiveOddsFeed):
+            return
+        snapshot = await feed.fetch_snapshot_async()
+        if feed is not self.feed:
+            return
         if isinstance(self.feed, LiveOddsFeed) and (
             snapshot.is_empty() or self.feed._last_fetch_failed
         ):
             if self.feed._last_error:
-                message = f"Live API Failed [{self.feed._last_error}] - Switching to Mock Feed"
+                message = f"Live API request failed ({self.feed._last_error}) - Switching to Mock Feed"
             else:
                 message = "Live API returned 0 fixtures - Switching to Mock Feed"
             self.notify(message, severity="error", timeout=10)
-            self.feed.close()
+            await self.feed.aclose()
             self.feed = MockOddsFeed()
             self.feed_indicator = "[MOCK FEED]"
             self.sub_title = f"{self.feed_indicator} · Live football markets"
             self.query_one(MatchDetailView)._history_provider = self.feed.history
             snapshot = self.feed.fetch_snapshot()
+        self._apply_snapshot(snapshot)
+
+    def _apply_snapshot(self, snapshot: Any) -> None:
+        """Apply a validated or empty snapshot to the mounted dashboard."""
+        if not hasattr(snapshot, "is_empty") or not hasattr(snapshot, "iter_rows"):
+            snapshot = MockOddsFeed().fetch_snapshot()
+        required_columns = {
+            "match_id", "league", "home_team", "away_team", "commence_time",
+            "value_edge", "value_odds", "value_probability", "value_pick",
+            "value_market", "edge_1X2", "edge_Over / Under", "edge_BTTS",
+            "edge_Asian Handicap", "home_win", "draw", "away_win", "over_2_5",
+            "under_2_5", "btts_yes", "btts_no", "ah_home", "ah_away",
+        }
+        if snapshot.is_empty() or not required_columns.issubset(snapshot.columns):
+            self._rows = {}
+            self._render_tables()
+            return
         self._rows = {str(row["match_id"]): row for row in snapshot.iter_rows(named=True)}
         if self._active_leagues is not None:
             self._active_leagues.intersection_update(str(row["league"]) for row in self._rows.values())
@@ -180,7 +210,7 @@ class OddsTickerApp(App[None]):
             "kickoff_time": lambda row: self._kickoff(row).timestamp() if self._kickoff(row) else float("inf"),
             "odds": lambda row: float(row["value_odds"]),
         }
-        rows.sort(key=sort_keys[self.current_sort])
+        rows.sort(key=sort_keys.get(self.current_sort, sort_keys["value_edge"]))
         for tab_id, market in self.MARKET_IDS.items():
             table = self.query_one(f"#table-{tab_id}", DataTable)
             table.clear()

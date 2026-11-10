@@ -1,78 +1,88 @@
 <div align="center">
 
-# ⚡ terminal-odds-ticker
+# ⚡ Terminal Odds Ticker
 
-**A keyboard-driven football odds and value analysis dashboard for your terminal.**
+**A keyboard-driven football odds dashboard for the terminal.**
 
-Compare simulated market prices, follow odds movement and explore Kelly staking in a fast Textual interface.
+![Release](https://img.shields.io/badge/release-v2.3.0-blue?style=for-the-badge)
+![Python](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Textual](https://img.shields.io/badge/interface-Textual-6741D9?style=for-the-badge)
+![Polars](https://img.shields.io/badge/data-Polars-CD792C?style=for-the-badge)
+![License](https://img.shields.io/badge/licence-MIT-green?style=for-the-badge)
 
-![Version 2.0.0](https://img.shields.io/badge/Version-2.0.0-blue?style=for-the-badge)
-![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![Textual](https://img.shields.io/badge/TUI-Textual-6741D9?style=for-the-badge)
-![Polars](https://img.shields.io/badge/Data-Polars-CD792C?style=for-the-badge)
-![MIT License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
-![Security Policy](https://img.shields.io/badge/Security-Policy-2ea44f?style=for-the-badge&logo=github)
-
-[Overview](#overview) · [What's New](#version-200-whats-new) · [Features](#features) · [Quick Start](#quick-start) · [Live API](#live-api) · [Keybindings](#keybindings) · [Security](SECURITY.md) · [License](#license)
+[Features](#features) · [Installation](#installation) · [Keybindings](#keybindings) · [Packaging](#packaging) · [Security](SECURITY.md)
 
 </div>
 
 ## Overview
 
-`terminal-odds-ticker` is a terminal-based quantitative football betting tool. Its simulated feed refreshes odds snapshots as Polars data, calculates market value edges and presents fixtures in an interactive Textual dashboard. Inspect a match, compare its markets and view suggested fractional Kelly stakes against an editable bankroll.
+Terminal Odds Ticker compares football markets in a responsive Textual interface. Review fixtures and value edges, inspect odds movement, and view fractional Kelly stake guidance against an editable bankroll. Live network requests run asynchronously so refreshes leave keyboard navigation and the Command Palette responsive.
 
-> The included feed is simulated. Prices and value estimates are illustrative and are not betting advice.
-
-## Version 2.0.0: What's New
-
-- **Tabbed market views:** Switch between 1X2, Over / Under 2.5, Both Teams to Score (BTTS) and Asian Handicap (-0.5 / +0.5).
-- **League Selection modal (`l`):** Choose individual leagues, select all leagues or clear the selection.
-- **Live odds trends:** A native Textual `Sparkline` plots the selected outcome's recent odds history, retained for up to 15 feed ticks per fixture.
-- **Dynamic Kelly modes (`k`):** Cycle through Quarter Kelly (25%), Half Kelly (50%) and Full Kelly (100%).
-- **Exposure warning:** A warning appears when the combined recommended stakes for positive-edge fixtures exceed 15% of the entered bankroll.
+Odds and calculations are informational estimates, not betting advice. The application does not place bets or process payments.
 
 ## Features
 
-- **Fast Polars engine** for working with refreshed multi-market snapshots.
-- **Bookmaker vig detection** using implied probabilities and overround calculations.
-- **Positive expected-value edge calculator** across all four supported market types.
-- **Fractional Kelly stake guidance** with an editable bankroll and selectable Kelly fraction.
-- **TCSS dark styling** with colour-coded edges, market tables and keyboard navigation.
-- **Deterministic mock feed option** for repeatable development and tests through a configurable random seed.
+- **Interactive TUI:** Colour-coded market tables, tabbed markets and a Match Inspector.
+- **Live API and Mock Feed:** Use The Odds API with an API key; choose the local mock feed during onboarding or when live data is unavailable.
+- **Today's Fixtures (`t`):** Filter the displayed fixtures to local today's date.
+- **Bankroll editor (`b`):** Set the bankroll used for stake guidance and exposure warnings.
+- **Sort Selection (`s`):** Choose value edge, implied win probability, kickoff time or decimal odds.
+- **Match Inspector:** Review four markets, recent price movement, bookmaker overround, fractional Kelly stake, and win probability/loss risk visualisers.
+- **League filter (`l`) and Kelly modes (`k`):** Focus the dashboard and cycle quarter, half and full Kelly guidance.
 
-## Quick Start
+The live feed requests supported European and UK leagues and normalises head-to-head, totals, BTTS and spread prices. Missing live fixtures or API errors fall back to the Mock Feed.
 
-Requires Python 3.12 or newer.
+## Installation
+
+Requires Python 3.12 or later.
 
 ```bash
 git clone https://github.com/imardagokce/terminal-odds-ticker.git
 cd terminal-odds-ticker
-pip install -e .
-odds-ticker
+python -m venv .venv
 ```
 
-To run the test suite:
+Activate the virtual environment, then install and launch:
 
 ```bash
-python -m unittest discover tests
+pip install -r requirements.txt
+python -m odds_ticker.app
 ```
 
-## Live API
-
-Set `ODDS_API_KEY` to enable live odds. Requests use decimal odds and cover the `eu,uk` regions, including European and UK bookmaker markets for supported leagues. The feed requests head-to-head, totals, BTTS and spreads markets.
-
-If no fixtures appear, check that the key is valid, the account has remaining quota, and fixtures are currently available in the selected regions. See the [Security Policy](SECURITY.md) for credential handling and vulnerability reporting.
+To use live odds, set `ODDS_API_KEY` in the environment before launching. Without a key, the application offers the Mock Feed. On Windows, you can also launch the packaged `odds-ticker.exe` from a terminal; it uses the same environment key or saved per-user configuration.
 
 ## Keybindings
 
 | Key | Action |
 |:---:|:---|
-| `l` | Open the league selection modal |
-| `k` | Cycle Quarter, Half and Full Kelly |
-| `s` | Cycle sort order |
-| `r` | Refresh the feed |
-| `q` | Quit the application |
+| `q` | Quit |
+| `r` | Refresh fixtures |
+| `s` | Open sort selection |
+| `l` | Open league filter |
+| `t` | Toggle today's fixtures / all fixtures |
+| `b` | Edit bankroll |
+| `k` | Cycle Kelly fraction |
+| `Ctrl+P` (`^p`) | Open the Command Palette |
 
-## License
+## Packaging
 
-This project is distributed under the [MIT License](LICENSE).
+Install dependencies and PyInstaller, then build the single-file executable with one command:
+
+```bash
+pip install -r requirements.txt pyinstaller
+pyinstaller --clean --noconfirm --onefile odds-ticker.spec
+```
+
+The executable is written to `dist/odds-ticker.exe` on Windows (or `dist/odds-ticker` on other platforms). Run it from a terminal to retain interactive TUI input.
+
+## Security
+
+Treat the Odds API key as a secret. Prefer `ODDS_API_KEY`; if saved through onboarding, it is stored in the current user's application configuration. Logs intentionally omit response bodies and credential-bearing request details. See [SECURITY.md](SECURITY.md) for credential handling and private vulnerability reporting.
+
+## Contributing
+
+Contributions are welcome. Keep changes focused, describe user-visible behaviour, and avoid committing API keys or other credentials. Review [SECURITY.md](SECURITY.md) before reporting a vulnerability; use the private reporting route described there instead of a public issue.
+
+## Licence
+
+Distributed under the [MIT Licence](LICENSE).
