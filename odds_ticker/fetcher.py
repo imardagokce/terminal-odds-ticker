@@ -19,13 +19,12 @@ BASE_URL = "https://api.the-odds-api.com/v4/sports"
 SPORTS: dict[str, str] = {
     "soccer_epl": "Premier League",
     "soccer_germany_bundesliga": "Bundesliga",
-    "soccer_netherlands_eredivisie": "Eredivisie",
-    "soccer_turkey_super_league": "Trendyol Süper Lig",
-    "soccer_uefa_champs_league": "UEFA Champions League",
-    "soccer_uefa_europa_league": "UEFA Europa League",
-    "soccer_uefa_europa_conf_league": "UEFA Europa Conference League",
     "soccer_spain_la_liga": "La Liga",
     "soccer_italy_serie_a": "Serie A",
+    "soccer_france_ligue_one": "Ligue 1",
+    "soccer_netherlands_eredivisie": "Eredivisie",
+    "soccer_uefa_champs_league": "UEFA Champions League",
+    "soccer_uefa_europa_league": "UEFA Europa League",
 }
 MARKET_KEYS = ("h2h", "totals", "spreads")
 LOGGER = logging.getLogger(__name__)
@@ -66,6 +65,7 @@ class LiveOddsFeed:
             return self._cached_snapshot.clone()
 
         rows: list[dict[str, Any]] = []
+        successful_requests = 0
         self._last_fetch_failed = False
         self._last_error = None
         for sport_key, league in SPORTS.items():
@@ -82,6 +82,14 @@ class LiveOddsFeed:
                 )
                 if response.status_code != 200:
                     detail = response.text[:300].replace("\n", " ")
+                    if response.status_code == 404:
+                        LOGGER.warning("Sport key '%s' unknown or inactive, skipping", sport_key)
+                        continue
+                    if response.status_code in (401, 429):
+                        self._last_fetch_failed = True
+                        self._last_error = f"HTTP {response.status_code}: {detail or response.reason_phrase}"
+                        LOGGER.error("Odds API global request failure for %s: HTTP %s: %s", sport_key, response.status_code, detail or response.reason_phrase)
+                        break
                     LOGGER.warning(
                         "Odds API request for %s returned HTTP %s: %s",
                         league,
@@ -89,14 +97,12 @@ class LiveOddsFeed:
                         detail or response.reason_phrase,
                     )
                     response.raise_for_status()
+                successful_requests += 1
                 payload = response.json()
                 if isinstance(payload, list):
                     rows.extend(self._parse_event(event, league) for event in payload)
             except httpx.HTTPStatusError as error:
-                self._last_fetch_failed = True
                 detail = error.response.text[:300].replace("\n", " ")
-                if self._last_error is None:
-                    self._last_error = f"HTTP {error.response.status_code}: {detail or error}"
                 LOGGER.error(
                     "Odds API request for %s failed with HTTP %s: %s",
                     league,
@@ -106,18 +112,16 @@ class LiveOddsFeed:
                 # Keep useful results from other leagues if an endpoint is unavailable.
                 continue
             except httpx.RequestError as error:
-                self._last_fetch_failed = True
-                if self._last_error is None:
-                    self._last_error = str(error)
                 LOGGER.error("Odds API request for %s failed: %s", league, error)
                 continue
             except (ValueError, TypeError, KeyError) as error:
-                self._last_fetch_failed = True
-                if self._last_error is None:
-                    self._last_error = str(error)
                 # Keep useful results from other leagues if an endpoint is unavailable.
                 LOGGER.warning("Could not fetch odds for %s: %s", league, error)
                 continue
+
+        if not self._last_fetch_failed and successful_requests == 0:
+            self._last_fetch_failed = True
+            self._last_error = "All sport key requests failed"
 
         if not rows:
             LOGGER.warning(

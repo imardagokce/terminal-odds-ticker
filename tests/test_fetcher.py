@@ -31,6 +31,25 @@ PAYLOAD = [{
 
 
 class LiveOddsFeedTests(unittest.TestCase):
+    def test_unknown_sport_is_skipped_while_other_leagues_remain_live(self) -> None:
+        calls = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            if request.url.path.endswith("/soccer_epl/odds"):
+                return httpx.Response(404, json={"message": "UNKNOWN_SPORT"})
+            return httpx.Response(200, json=PAYLOAD)
+
+        client = httpx.Client(transport=httpx.MockTransport(handler))
+        feed = LiveOddsFeed("test-key", client=client, ttl=0)
+
+        snapshot = feed.fetch_snapshot()
+
+        self.assertEqual(snapshot.height, len(SPORTS) - 1)
+        self.assertFalse(feed._last_fetch_failed)
+        self.assertEqual(len(calls), len(SPORTS))
+        client.close()
+
     def test_parse_event_normalises_all_markets(self) -> None:
         feed = LiveOddsFeed("test-key", client=httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(200, json=PAYLOAD))))
         row = feed._parse_event(PAYLOAD[0], "Trendyol Süper Lig")
