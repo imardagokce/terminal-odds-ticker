@@ -6,7 +6,7 @@ from collections.abc import Callable
 from typing import Any
 
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widget import Widget
 from textual.widgets import Button, Checkbox, Input, Sparkline, Static
@@ -39,6 +39,8 @@ class ApiKeyModal(ModalScreen[str | None]):
 class LeagueFilterModal(ModalScreen[set[str] | None]):
     """Choose which leagues appear in the market tables."""
 
+    BINDINGS = [("escape", "cancel", "Cancel"), ("l", "cancel", "Close")]
+
     def __init__(self, leagues: list[str], selected: set[str]) -> None:
         super().__init__()
         self.leagues = sorted(set(leagues) or DEFAULT_LEAGUES)
@@ -47,9 +49,10 @@ class LeagueFilterModal(ModalScreen[set[str] | None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="league-modal"):
             yield Static("SELECT LEAGUES", classes="modal-title")
-            for league in self.leagues:
-                yield Checkbox(league, value=league in self.selected, id=f"league-{self.leagues.index(league)}")
-            with Horizontal():
+            with VerticalScroll(id="league-options"):
+                for index, league in enumerate(self.leagues):
+                    yield Checkbox(league, value=league in self.selected, id=f"league-{index}")
+            with Horizontal(id="league-footer"):
                 yield Button("All", id="select-all")
                 yield Button("None", id="select-none")
                 yield Button("Apply", variant="primary", id="apply")
@@ -65,7 +68,11 @@ class LeagueFilterModal(ModalScreen[set[str] | None]):
         elif event.button.id == "apply":
             self.dismiss({checkbox.label.plain for checkbox in self.query(Checkbox) if checkbox.value})
         elif event.button.id == "cancel":
-            self.dismiss(None)
+            self.action_cancel()
+
+    def action_cancel(self) -> None:
+        """Close the dialog without applying changes."""
+        self.dismiss(None)
 
 
 class MatchDetailView(Widget):

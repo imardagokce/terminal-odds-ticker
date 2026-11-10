@@ -23,8 +23,9 @@ SPORTS: dict[str, str] = {
     "soccer_italy_serie_a": "Serie A",
     "soccer_france_ligue_one": "Ligue 1",
     "soccer_netherlands_eredivisie": "Eredivisie",
-    "soccer_uefa_champs_league": "UEFA Champions League",
-    "soccer_uefa_europa_league": "UEFA Europa League",
+    "soccer_turkey_super_league": "Trendyol Süper Lig",
+    "soccer_uefa_champs_league": "Champions League",
+    "soccer_uefa_europa_league": "Europa League",
 }
 MARKET_KEYS = ("h2h", "totals", "spreads")
 LOGGER = logging.getLogger(__name__)

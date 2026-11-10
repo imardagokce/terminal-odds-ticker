@@ -61,6 +61,17 @@ ApiKeyModal Button { margin: 0 1 0 0; }
     padding: 1 2;
 }
 
+#league-options {
+    height: auto;
+    max-height: 12;
+    overflow-y: scroll;
+}
+
+#league-footer {
+    height: auto;
+    dock: bottom;
+}
+
 .modal-title { color: #7dd3fc; text-style: bold; padding-bottom: 1; }
 
 LeagueFilterModal Checkbox { height: 3; }
