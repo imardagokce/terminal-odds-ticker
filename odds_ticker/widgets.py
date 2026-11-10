@@ -12,6 +12,10 @@ from textual.widget import Widget
 from textual.widgets import Button, Checkbox, Input, Sparkline, Static
 
 from odds_ticker.analytics import calculate_fractional_kelly, calculate_implied_probability, calculate_overround
+from odds_ticker.fetcher import SPORTS
+
+
+DEFAULT_LEAGUES = tuple(SPORTS.values())
 
 
 class ApiKeyModal(ModalScreen[str | None]):
@@ -37,8 +41,8 @@ class LeagueFilterModal(ModalScreen[set[str] | None]):
 
     def __init__(self, leagues: list[str], selected: set[str]) -> None:
         super().__init__()
-        self.leagues = leagues
-        self.selected = set(selected)
+        self.leagues = sorted(set(leagues) or DEFAULT_LEAGUES)
+        self.selected = set(selected) if selected else set(self.leagues)
 
     def compose(self) -> ComposeResult:
         with Vertical(id="league-modal"):

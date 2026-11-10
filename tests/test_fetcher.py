@@ -1,11 +1,13 @@
 """Tests for normalising The Odds API responses."""
 
 import unittest
+from unittest.mock import patch
 
 import httpx
 import polars as pl
 
 from odds_ticker.fetcher import LiveOddsFeed, SPORTS
+from odds_ticker.feed import MockOddsFeed
 from odds_ticker.models import MatchOdds
 
 
@@ -58,6 +60,28 @@ class LiveOddsFeedTests(unittest.TestCase):
         self.assertEqual(second.height, first.height)
         self.assertEqual(len(calls), len(SPORTS))
         self.assertEqual(calls[0].url.params["markets"], "h2h,totals,btts,spreads")
+        client.close()
+
+    def test_app_falls_back_to_mock_feed_when_api_errors(self) -> None:
+        from odds_ticker.app import OddsTickerApp
+
+        client = httpx.Client(transport=httpx.MockTransport(
+            lambda request: httpx.Response(403, text="invalid API key")
+        ))
+        with patch.dict("os.environ", {"ODDS_API_KEY": "test-key"}):
+            app = OddsTickerApp()
+        app.feed.close()
+        app.feed = LiveOddsFeed("test-key", client=client)
+
+        async def exercise_app() -> None:
+            async with app.run_test() as pilot:
+                await pilot.pause()
+                self.assertIsInstance(app.feed, MockOddsFeed)
+                self.assertGreater(len(app._rows), 0)
+                self.assertEqual(app.feed_indicator, "[MOCK FEED]")
+
+        import asyncio
+        asyncio.run(exercise_app())
         client.close()
 
 

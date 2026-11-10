@@ -122,6 +122,16 @@ class OddsTickerApp(App[None]):
     def refresh_snapshot(self) -> None:
         """Update cached fixtures, all market tables and exposure guidance."""
         snapshot = self.feed.fetch_snapshot()
+        if isinstance(self.feed, LiveOddsFeed) and (
+            snapshot.is_empty() or self.feed._last_fetch_failed
+        ):
+            self.notify("API returned 0 fixtures or failed. Falling back to Mock Feed.", severity="warning")
+            self.feed.close()
+            self.feed = MockOddsFeed()
+            self.feed_indicator = "[MOCK FEED]"
+            self.sub_title = f"{self.feed_indicator} · Live football markets"
+            self.query_one(MatchDetailView)._history_provider = self.feed.history
+            snapshot = self.feed.fetch_snapshot()
         self._rows = {str(row["match_id"]): row for row in snapshot.iter_rows(named=True)}
         if self._active_leagues is not None:
             self._active_leagues.intersection_update(str(row["league"]) for row in self._rows.values())
